@@ -4,7 +4,6 @@ import { jobs } from "@/db/schema";
 import { inArray } from "drizzle-orm";
 import { storageService } from "@/services/storage";
 import JSZip from "jszip";
-import path from "node:path";
 
 const app = new Hono();
 
@@ -15,23 +14,40 @@ app.post("/", async (c) => {
     return c.json({ error: "Invalid or empty 'jobIds' array." }, 400);
   }
 
-  const zip = new JSZip();
-
   try {
     const jobsToDownload = await db.query.jobs.findMany({
       where: inArray(jobs.id, jobIds),
-      with: { files: true }, // Drizzle relation query
+      with: { files: true },
     });
 
-    for (const job of jobsToDownload) {
-      if (job.files.length > 0) {
-        const jobFolder = zip.folder(job.name.replace(/[/\\?%*:|"<>]/g, "-"));
-        for (const file of job.files) {
-          const fileBuffer = await storageService.downloadFile(file.path);
-          const fileName = `${job.name.replace(/[/\\?%*:|"<>]/g, "-")}.${file.language}.vtt`;
-          jobFolder?.file(fileName, fileBuffer);
-        }
+    const downloadPromises = jobsToDownload.flatMap((job) =>
+      job.files.map((file) =>
+        storageService.downloadFile(file.path).then((buffer) => ({
+          jobName: job.name,
+          language: file.language,
+          buffer,
+        })),
+      ),
+    );
+
+    const downloadedFiles = await Promise.all(downloadPromises);
+
+    const zip = new JSZip();
+    // CORRECTED TYPE: A folder context is a JSZip instance, not a JSZipObject.
+    const jobFolders: Record<string, JSZip> = {};
+
+    for (const fileData of downloadedFiles) {
+      const sanitizedJobName = fileData.jobName.replace(/[/\\?%*:|"<>]/g, "-");
+
+      if (!jobFolders[sanitizedJobName]) {
+        // zip.folder() returns a new JSZip instance scoped to that folder.
+        jobFolders[sanitizedJobName] = zip.folder(sanitizedJobName)!;
       }
+
+      const jobFolder = jobFolders[sanitizedJobName];
+      const fileName = `${sanitizedJobName}.${fileData.language}.vtt`;
+      // This now works because jobFolder is correctly typed as JSZip.
+      jobFolder.file(fileName, fileData.buffer);
     }
 
     const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });

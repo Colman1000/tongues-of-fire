@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export const jobs = sqliteTable("jobs", {
@@ -46,3 +46,32 @@ export const logs = sqliteTable("logs", {
     .default(sql`(strftime('%s', 'now'))`)
     .notNull(),
 });
+
+// --- RELATIONSHIP DEFINITIONS ---
+// This section tells Drizzle how to join the tables for relational queries.
+
+export const jobsRelations = relations(jobs, ({ many }) => ({
+  // A job can have many translated files.
+  files: many(translatedFiles),
+  // A job can have many log entries.
+  logs: many(logs),
+}));
+
+export const translatedFilesRelations = relations(
+  translatedFiles,
+  ({ one }) => ({
+    // A translated file belongs to one job.
+    job: one(jobs, {
+      fields: [translatedFiles.jobId],
+      references: [jobs.id],
+    }),
+  }),
+);
+
+export const logsRelations = relations(logs, ({ one }) => ({
+  // A log entry belongs to one job.
+  job: one(jobs, {
+    fields: [logs.jobId],
+    references: [jobs.id],
+  }),
+}));

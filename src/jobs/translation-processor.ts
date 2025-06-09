@@ -39,18 +39,22 @@ async function processJob() {
 
     const translatePromises = job.targetLanguages.map(async (lang) => {
       const localVtt = path.join(tempDir, `${lang}.vtt`);
+
+      // --- THE FIX IS HERE ---
+      // The deepl-node library expects file paths (strings), not BunFile objects.
+      // We pass the string variables directly.
       await translator.translateDocument(
-        Bun.file(localSourceSrt),
-        Bun.file(localVtt),
-        null,
+        localSourceSrt,
+        localVtt,
+        null, // sourceLang (null for auto-detect)
         lang as deepl.TargetLanguageCode,
       );
 
       const remoteVttPath = `processed/${job.id}/${lang}.vtt`;
-      await storageService.uploadFile(
-        remoteVttPath,
-        await Bun.file(localVtt).arrayBuffer(),
-      );
+      // We still use Bun.file() here because it's great for reading a file
+      // to upload its contents.
+      const translatedFileBuffer = await Bun.file(localVtt).arrayBuffer();
+      await storageService.uploadFile(remoteVttPath, translatedFileBuffer);
       await db
         .insert(translatedFiles)
         .values({ jobId: job.id, language: lang, path: remoteVttPath });

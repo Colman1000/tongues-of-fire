@@ -17,14 +17,6 @@ const awsS3Client = new S3Client({
 
 const BUCKET_NAME = process.env.S3_BUCKET_NAME!;
 
-const credentials = {
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-  bucket: BUCKET_NAME,
-  endpoint: "https://s3.us-east-1.amazonaws.com",
-  // endpoint: "https://<account-id>.r2.cloudflarestorage.com", // Cloudflare R2
-};
-
 // --- Bun's Native S3 Client for Server-Side Operations ---
 const bunS3Client = new Bun.S3Client({
   region: process.env.AWS_REGION!,
