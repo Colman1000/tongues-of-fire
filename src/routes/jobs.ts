@@ -26,7 +26,18 @@ app.get("/:id", async (c) => {
     return c.json({ error: "Job not found." }, 404);
   }
 
-  return c.json(job);
+  // --- THE FIX IS HERE: Calculate the correct total credits ---
+  const totalCreditsUsed = job.files
+    .filter((file) => file.language !== "en") // Exclude the 'en' file
+    .reduce((sum, file) => sum + file.creditsUsed, 0); // Sum the rest
+
+  // Construct a new response object with the added field
+  const response = {
+    ...job,
+    totalCreditsUsed,
+  };
+
+  return c.json(response);
 });
 
 // --- NEW: Endpoint to append languages to existing jobs ---

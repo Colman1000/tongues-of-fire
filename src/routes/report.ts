@@ -74,9 +74,12 @@ app.get("/", async (c) => {
       languages: jobs.targetLanguages,
       createdAt: jobs.createdAt,
       status: jobs.status,
-      creditsUsed: sql<number>`SUM(${translatedFiles.creditsUsed})`.mapWith(
-        Number,
-      ),
+      // --- THE FIX IS HERE: Use a conditional SUM ---
+      // Only sum credits where the language is NOT 'en'.
+      creditsUsed:
+        sql<number>`SUM(CASE WHEN ${translatedFiles.language} != 'en' THEN ${translatedFiles.creditsUsed} ELSE 0 END)`.mapWith(
+          Number,
+        ),
     })
     .from(jobs)
     .leftJoin(translatedFiles, eq(jobs.id, translatedFiles.jobId))
