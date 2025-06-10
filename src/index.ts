@@ -25,7 +25,18 @@ const app = new Hono();
 
 // Apply global middleware
 app.use("*", logger());
-app.use("*", cors({ origin: "*" }));
+app.use(
+  "*",
+  cors({
+    // For development, allowing all origins is fine.
+    // For production, you should restrict this to your frontend's domain.
+    // Example: origin: 'https://your-frontend-app.com'
+    origin: "*",
+    allowMethods: ["GET", "POST", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+    maxAge: 600, // Optional: Cache preflight response for 10 minutes
+  }),
+);
 
 // --- Public and Privileged Routes ---
 app.get("/", (c) => {
