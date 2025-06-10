@@ -1,0 +1,52 @@
+# This name will appear in the "Actions" tab of your GitHub repository.
+name: Build and Push Docker Image
+
+# This section defines when the workflow will run.
+on:
+  # Triggers the workflow on push events but only for the "main" branch.
+  push:
+    branches: ["main"]
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel.
+jobs:
+  # This job is named "build-and-push".
+  build-and-push:
+    # The type of runner that the job will run on.
+    runs-on: ubuntu-latest
+
+    # A sequence of tasks that will be executed as part of the job.
+    steps:
+      # Step 1: Check out your repository's code so the workflow can access it.
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      # Step 2: Log in to Docker Hub using secrets.
+      # This uses an official Docker action for secure login.
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Step 3: Set up Docker Buildx.
+      # This is a best practice for building images with Docker's newer features.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Step 4: Build the Docker image and push it to Docker Hub.
+      # This is the core step of the workflow.
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          # The build context is the root of the repository.
+          context: .
+          # The path to the Dockerfile.
+          file: ./Dockerfile
+          # This flag tells the action to push the image after building.
+          push: true
+          # This defines the tags for the image. We create two:
+          # 1. 'latest' for the most recent build on the main branch.
+          # 2. The Git commit SHA for a unique, versioned tag.
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/your-app-name:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/your-app-name:${{ github.sha }}
