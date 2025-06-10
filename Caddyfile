@@ -1,3 +1,7 @@
-:80 {
+{
+    email easecore.ltd@gmail.com
+}
+
+18baa58dedac547753d33f0193b84767.easecore.online {
     reverse_proxy server:3000
 }

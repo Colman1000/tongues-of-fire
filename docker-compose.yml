@@ -2,15 +2,13 @@ services:
   server:
     image: colman1000/pentecost:latest
     container_name: bun-server
-    ports:
-      - "3000:3000"
     env_file:
       - .env
     volumes:
       - ./app.db:/usr/src/app/app.db
     networks:
       - app-network
-    command: sh -c "bun run src/db/migrate.ts && bun run src/index.ts"
+    command: sh -c "bun run src/db/migrate.ts && bun run src/db/seed.ts && bun run src/index.ts"
 
   worker:
     image: colman1000/pentecost:latest
@@ -31,7 +29,8 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
-    #      - "443:443"
+      - "443:443"
+      - "443:443/udp"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data
