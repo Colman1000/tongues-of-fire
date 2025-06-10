@@ -177,11 +177,21 @@ async function processJob() {
 }
 
 async function main() {
-  console.log("Translation processor started. Checking for jobs...");
+  // Read the interval from environment variables, with a fallback.
+  const intervalSeconds = parseInt(
+    process.env.JOB_WORKER_INTERVAL_SECONDS || "20",
+    10,
+  );
+  const intervalMilliseconds = intervalSeconds * 1000;
+
+  console.log(
+    `Translation processor started. Checking for jobs every ${intervalSeconds} seconds...`,
+  );
+
   while (true) {
     await processJob();
-    await new Promise((resolve) => setTimeout(resolve, 10000));
+    // Use the configured interval in the loop's delay.
+    await new Promise((resolve) => setTimeout(resolve, intervalMilliseconds));
   }
 }
-
 main().catch(console.error);

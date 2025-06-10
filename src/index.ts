@@ -13,7 +13,8 @@ if (
   !process.env.JWT_SECRET ||
   !process.env.CREDIT_COST_PER_BLOCK ||
   !process.env.CREDIT_BLOCK_DURATION_MINUTES ||
-  !process.env.RECHARGE_SECRET_TOKEN // 2. Add check for new token
+  !process.env.RECHARGE_SECRET_TOKEN ||
+  !process.env.JOB_WORKER_INTERVAL_SECONDS
 ) {
   throw new Error(
     "All required environment variables (API, JWT, CREDITS, RECHARGE) must be set.",
