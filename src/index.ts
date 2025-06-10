@@ -32,7 +32,7 @@ app.use(
     // For production, you should restrict this to your frontend's domain.
     // Example: origin: 'https://your-frontend-app.com'
     origin: "*",
-    allowMethods: ["GET", "POST", "OPTIONS"],
+    allowMethods: ["GET", "POST", "DELETE", "PATCH", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
     maxAge: 600, // Optional: Cache preflight response for 10 minutes
   }),
