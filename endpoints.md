@@ -331,6 +331,88 @@ curl -H "Authorization: Bearer <YOUR_JWT_TOKEN>" http://ec2-54-87-136-3.compute-
   "availableUnits": 9850.5
 }
 ```
+---
+
+Of course. Adding a comprehensive, queryable audit log endpoint is a crucial step for monitoring and security. We'll follow the same robust pattern we established for the `/report` endpoint.
+
+Here is the complete implementation.
+
+---
+
+### **6. Auditing**
+
+#### **Get Audit Logs**
+
+*   **Endpoint:** `GET /api/audit`
+*   **Description:** Retrieves a paginated, filterable, and sortable list of all audit log events in the system.
+
+**Query Parameters**
+| Parameter | Type | Description | Default |
+| :--- | :--- | :--- | :--- |
+| `page` | `number` | The page number to retrieve. | `1` |
+| `pageSize` | `number` | The number of items per page. (Max: 100) | `10` |
+| `search` | `string` | A search term to filter logs by the `actor` field. | `""` |
+| `sortBy` | `string` | Column to sort by: `actor`, `action`, `createdAt`. | `createdAt` |
+| `sortOrder` | `string` | Sort direction: `asc`, `desc`. | `desc` |
+| `filter[action]` | `string` | Comma-separated list of actions to filter by (e.g., `USER_LOGIN,JOB_DELETED`). | `""` |
+
+**Valid Actions for Filtering:**
+`USER_LOGIN`, `USER_LOGIN_FAILED`, `JOB_CREATED`, `JOB_DELETED`, `JOB_DOWNLOADED`, `JOB_LANGUAGES_APPENDED`, `JOB_FAILED`, `CREDITS_RECHARGED`
+
+#### **Example Requests (`curl`)**
+
+**Get the latest audit events**
+```bash
+curl -H "Authorization: Bearer <YOUR_JWT_TOKEN>" "http://localhost:3000/api/audit"
+```
+
+**Search for all actions performed by the 'admin' user**
+```bash
+curl -H "Authorization: Bearer <YOUR_JWT_TOKEN>" "http://localhost:3000/api/audit?search=admin"
+```
+
+**Filter for only credit recharges and failed jobs, sorted by action**
+```bash
+curl -H "Authorization: Bearer <YOUR_JWT_TOKEN>" "http://localhost:3000/api/audit?filter[action]=CREDITS_RECHARGED,JOB_FAILED&sortBy=action"
+```
+
+#### **Success Response (`200 OK`)**
+
+The response is an object containing the `data` for the current page and a `meta` object with pagination details.
+
+```json
+{
+  "data": [
+    {
+      "id": 5,
+      "actor": "admin_recharge",
+      "action": "CREDITS_RECHARGED",
+      "details": {
+        "amount": 5000
+      },
+      "createdAt": "2025-06-11T12:00:00.000Z"
+    },
+    {
+      "id": 4,
+      "actor": "admin",
+      "action": "JOB_DELETED",
+      "details": {
+        "deletedIds": [2]
+      },
+      "createdAt": "2025-06-11T11:55:10.000Z"
+    }
+  ],
+  "meta": {
+    "totalItems": 2,
+    "currentPage": 1,
+    "pageSize": 10,
+    "totalPages": 1,
+    "hasNextPage": false,
+    "hasPrevPage": false
+  }
+}
+```
+
 
 ---
 

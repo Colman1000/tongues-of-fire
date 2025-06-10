@@ -5,6 +5,7 @@ import report from "./report";
 import download from "./download";
 import dashboard from "./dashboard";
 import jobs from "./jobs";
+import audit from "./audit";
 
 const app = new Hono();
 
@@ -15,5 +16,5 @@ app.route("/report", report);
 app.route("/download", download);
 app.route("/dashboard", dashboard);
 app.route("/jobs", jobs);
-
+app.route("/audit", audit);
 export default app;
