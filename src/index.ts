@@ -1,35 +1,50 @@
 import { Hono } from "hono";
 import { logger } from "hono/logger";
-import { cors } from "hono/cors"; // 1. Import the CORS middleware
+import { cors } from "hono/cors";
+import { jwt } from "hono/jwt";
 import apiRoutes from "./routes";
+import authRoutes from "./routes/auth";
+
+// Fail-fast if required secrets are not set
+if (
+  !process.env.API_USERNAME ||
+  !process.env.API_PASSWORD ||
+  !process.env.JWT_SECRET
+) {
+  throw new Error(
+    "API_USERNAME, API_PASSWORD, and JWT_SECRET environment variables are required.",
+  );
+}
 
 const app = new Hono();
 
-// 2. Apply the CORS middleware to all /api/* routes
-// This should come before the logger and route registration for best results.
-app.use(
-  "/api/*",
-  cors({
-    // For development, allowing all origins is fine.
-    // For production, you should restrict this to your frontend's domain.
-    // Example: origin: 'https://your-frontend-app.com'
-    origin: "*",
-    allowMethods: ["GET", "POST", "OPTIONS"],
-    allowHeaders: ["Content-Type", "Authorization"],
-    maxAge: 600, // Optional: Cache preflight response for 10 minutes
-  }),
-);
-
-// Logger middleware
+// Apply global middleware
 app.use("*", logger());
+app.use("*", cors({ origin: "*" }));
 
-// Health check endpoint
+// --- Public Routes ---
+// The health check and auth routes are NOT protected by JWT middleware.
 app.get("/", (c) => {
   return c.text("SRT/VTT Translation Service API is operational.");
 });
+app.route("/auth", authRoutes);
 
-// Register API routes
-app.route("/api", apiRoutes);
+// --- Protected API Routes ---
+const api = new Hono();
+
+// 3. Apply the JWT middleware to this sub-router
+api.use(
+  "*",
+  jwt({
+    secret: process.env.JWT_SECRET,
+  }),
+);
+
+// 4. Register the protected routes within the JWT-guarded router
+api.route("/", apiRoutes);
+
+// 5. Mount the protected router under the /api path
+app.route("/api", api);
 
 const port = parseInt(process.env.PORT || "3000");
 console.log(`🚀 Server is running on http://localhost:${port}`);

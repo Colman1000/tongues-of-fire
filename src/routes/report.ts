@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { db } from "@/db";
-import { jobs, logs } from "@/db/schema";
-import { desc, eq, sql } from "drizzle-orm";
+import { jobs, translatedFiles } from "@/db/schema";
+import { desc, sql } from "drizzle-orm";
 import type { JobReport } from "@/types";
 
 const app = new Hono();
@@ -14,7 +14,7 @@ app.get("/", async (c) => {
       languages: jobs.targetLanguages,
       createdAt: jobs.createdAt,
       status: jobs.status,
-      creditsUsed: sql<number>`(SELECT SUM(${logs.creditsUsed}) FROM ${logs} WHERE ${logs.jobId} = ${jobs.id})`,
+      creditsUsed: sql<number>`(SELECT SUM(${translatedFiles.creditsUsed}) FROM ${translatedFiles} WHERE ${translatedFiles.jobId} = ${jobs.id})`,
     })
     .from(jobs)
     .orderBy(desc(jobs.createdAt));

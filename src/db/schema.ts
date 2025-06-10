@@ -1,5 +1,5 @@
-import { relations, sql } from "drizzle-orm";
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { sql, relations } from "drizzle-orm";
+import { integer, sqliteTable, text, real } from "drizzle-orm/sqlite-core";
 
 export const jobs = sqliteTable("jobs", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -30,6 +30,8 @@ export const translatedFiles = sqliteTable("translatedFiles", {
     .references(() => jobs.id, { onDelete: "cascade" }),
   language: text("language").notNull(),
   path: text("path").notNull(),
+  subtitleDurationSeconds: integer("subtitle_duration_seconds").notNull(),
+  creditsUsed: real("credits_used").notNull(),
   createdAt: integer("createdAt", { mode: "timestamp" })
     .default(sql`(strftime('%s', 'now'))`)
     .notNull(),
@@ -40,27 +42,29 @@ export const logs = sqliteTable("logs", {
   jobId: integer("jobId")
     .notNull()
     .references(() => jobs.id, { onDelete: "cascade" }),
-  creditsUsed: integer("creditsUsed"),
   message: text("message"),
   createdAt: integer("createdAt", { mode: "timestamp" })
     .default(sql`(strftime('%s', 'now'))`)
     .notNull(),
 });
 
-// --- RELATIONSHIP DEFINITIONS ---
-// This section tells Drizzle how to join the tables for relational queries.
+// This table will hold a single row for the system's credit balance.
+export const systemCredits = sqliteTable("system_credits", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  availableUnits: real("available_units").notNull().default(0),
+  updatedAt: integer("updatedAt", { mode: "timestamp" })
+    .default(sql`(strftime('%s', 'now'))`)
+    .$onUpdate(() => new Date()),
+});
 
 export const jobsRelations = relations(jobs, ({ many }) => ({
-  // A job can have many translated files.
   files: many(translatedFiles),
-  // A job can have many log entries.
   logs: many(logs),
 }));
 
 export const translatedFilesRelations = relations(
   translatedFiles,
   ({ one }) => ({
-    // A translated file belongs to one job.
     job: one(jobs, {
       fields: [translatedFiles.jobId],
       references: [jobs.id],
@@ -69,7 +73,6 @@ export const translatedFilesRelations = relations(
 );
 
 export const logsRelations = relations(logs, ({ one }) => ({
-  // A log entry belongs to one job.
   job: one(jobs, {
     fields: [logs.jobId],
     references: [jobs.id],

@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { db } from "@/db";
 import { jobs, translatedFiles } from "@/db/schema";
+import { calculateSubtitleDuration, calculateCredits } from "@/utils/subtitle";
 import { storageService } from "@/services/storage";
 import { srtToVtt, vttToSrt } from "@/services/file-converter";
 import { eq } from "drizzle-orm";
@@ -44,6 +45,10 @@ app.post("/", async (c) => {
         await storageService.downloadFile(originalPath)
       ).toString("utf-8");
 
+      // --- NEW: Calculate metrics for the source file ---
+      const duration = calculateSubtitleDuration(fileContent);
+      const credits = calculateCredits(duration);
+
       let sourceSrtPath = "";
       if (fileExt === ".srt") {
         sourceSrtPath = originalPath;
@@ -52,9 +57,13 @@ app.post("/", async (c) => {
           vttPath,
           Buffer.from(srtToVtt(fileContent)),
         );
-        await db
-          .insert(translatedFiles)
-          .values({ jobId, language: "en", path: vttPath });
+        await db.insert(translatedFiles).values({
+          jobId,
+          language: "en",
+          path: vttPath,
+          subtitleDurationSeconds: duration,
+          creditsUsed: credits,
+        });
       } else if (fileExt === ".vtt") {
         sourceSrtPath = `processed/${jobId}/source.srt`;
         await storageService.uploadFile(
@@ -63,7 +72,13 @@ app.post("/", async (c) => {
         );
         await db
           .insert(translatedFiles)
-          .values({ jobId, language: "en", path: originalPath });
+          .values({
+            jobId,
+            language: "en",
+            path: originalPath,
+            subtitleDurationSeconds: duration,
+            creditsUsed: credits,
+          });
       }
 
       await db
