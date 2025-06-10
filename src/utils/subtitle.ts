@@ -5,14 +5,12 @@
  * @returns The total duration in seconds.
  */
 export function calculateSubtitleDuration(content: string): number {
-  // Regex to find all timestamps like 00:00:00,000 or 00:00:00.000
   const timestamps = content.match(/(\d{2}):(\d{2}):(\d{2})[,.](\d{3})/g);
 
   if (!timestamps || timestamps.length === 0) {
     return 0;
   }
 
-  // The last timestamp in the file marks the end time.
   const lastTimestamp = timestamps[timestamps.length - 1];
   const parts = lastTimestamp.split(/[:,.]/);
 
@@ -25,7 +23,7 @@ export function calculateSubtitleDuration(content: string): number {
 
 /**
  * Calculates the credits used based on subtitle duration.
- * The rule is 0.5 credits for every 15-minute block (or part thereof).
+ * The rule is configurable via environment variables.
  * @param durationInSeconds The duration of the subtitle file.
  * @returns The number of credits used.
  */
@@ -33,12 +31,20 @@ export function calculateCredits(durationInSeconds: number): number {
   if (durationInSeconds <= 0) {
     return 0;
   }
-  const minutesInBlock = 15;
-  const secondsInBlock = minutesInBlock * 60; // 900 seconds
 
-  // Calculate how many 15-minute blocks are needed.
-  // Math.ceil ensures that even 1 second into a new block counts as a full block.
+  // Read configuration from environment variables
+  const costPerBlock = parseFloat(process.env.CREDIT_COST_PER_BLOCK!);
+  const blockDurationMinutes = parseInt(
+    process.env.CREDIT_BLOCK_DURATION_MINUTES!,
+    10,
+  );
+  const secondsInBlock = blockDurationMinutes * 60;
+
+  if (secondsInBlock <= 0) {
+    return 0; // Avoid division by zero if config is invalid
+  }
+
   const blocks = Math.ceil(durationInSeconds / secondsInBlock);
 
-  return blocks * 0.5;
+  return blocks * costPerBlock;
 }

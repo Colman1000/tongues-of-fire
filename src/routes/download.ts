@@ -4,6 +4,7 @@ import { jobs } from "@/db/schema";
 import { inArray } from "drizzle-orm";
 import { storageService } from "@/services/storage";
 import JSZip from "jszip";
+import { logAuditEvent } from "@/services/audit";
 
 const app = new Hono();
 
@@ -55,6 +56,14 @@ app.post("/", async (c) => {
     await storageService.uploadFile(zipFileName, zipBuffer);
 
     const downloadUrl = await storageService.getSignedDownloadUrl(zipFileName);
+
+    const { sub: actor } = c.get("jwtPayload");
+    await logAuditEvent({
+      actor,
+      action: "JOB_DOWNLOADED",
+      details: { jobIds },
+    });
+
     return c.json({ downloadUrl });
   } catch (error) {
     console.error("Failed to create zip archive:", error);

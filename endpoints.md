@@ -1,230 +1,371 @@
 # **Subtitle Translation Service API Documentation**
 
-This document provides detailed information about the API endpoints for the Subtitle Translation Service.
+This document provides detailed information about the API endpoints for the Subtitle Translation Service. The API allows for uploading subtitle files, managing translation jobs, and monitoring system resources, all protected by a robust authentication system.
 
 ## **Base URL**
 
-All API endpoints are prefixed with `/api`. The base URL for a local development environment is:
+All API endpoints are prefixed. The base URL for a local development environment is:
 
-`http://localhost:3000/api`
+`http://ec2-54-87-136-3.compute-1.amazonaws.com`
 
 ## **Authentication**
 
-No authentication is required for the current version of this API.
+This API uses **JWT (JSON Web Token)** for standard user authentication. Access is a two-step process:
+
+1.  **Login:** First, you must send a `POST` request with your `username` and `password` to the `/auth/login` endpoint to receive a temporary access token.
+2.  **Authenticated Requests:** For all subsequent requests to the `/api/*` endpoints, you must include this token in the `Authorization` header with the `Bearer` scheme.
+
+The token is valid for **24 hours**.
 
 ---
 
-## **Endpoints**
+## **Public Endpoints**
 
-The typical workflow is as follows:
-1.  Get pre-signed URLs for your files using `POST /upload/signed-url`.
-2.  Upload your files directly to the cloud storage using the provided URLs.
-3.  Create translation jobs using `POST /process`.
-4.  Check the status of your jobs using `GET /report`.
-5.  Once jobs are complete, download the results using `POST /download`.
+These endpoints do not require JWT authentication.
 
----
+### **1. Login and Get Token**
 
-### **1. Get Pre-signed Upload URLs**
-
-Generates secure, temporary URLs that allow a client to upload subtitle files directly to the cloud storage provider (S3 or R2). This avoids proxying large files through the API server.
-
-*   **Endpoint:** `POST /upload/signed-url`
-*   **Description:** Requests one or more pre-signed URLs for uploading `.srt` or `.vtt` files.
+*   **Endpoint:** `POST /auth/login`
+*   **Description:** Authenticates with static credentials and returns a JWT. This is the first step for all API interactions.
 
 #### **Request Body**
 
-| Field | Type           | Description                               | Required |
-| :---- | :------------- | :---------------------------------------- | :------- |
-| `files` | `string[]`     | An array of filenames you intend to upload. | Yes      |
+| Field      | Type     | Description      |
+| :--------- | :------- | :--------------- |
+| `username` | `string` | The API username. |
+| `password` | `string` | The API password. |
 
 **Example Request (`curl`)**
 ```bash
-curl -X POST http://localhost:3000/api/upload/signed-url \
+curl -X POST http://ec2-54-87-136-3.compute-1.amazonaws.com/auth/login \
 -H "Content-Type: application/json" \
 -d '{
-  "files": ["Attending Grace.srt", "Messaging.vtt", "invalid-file.txt"]
+  "username": "admin",
+  "password": "your_strong_secret_password"
 }'
 ```
 
 #### **Success Response (`200 OK`)**
 
-Returns a list of objects, each containing the original filename, a unique path for the file in storage, and the pre-signed `uploadUrl`. If a file has an invalid extension, its `uploadUrl` will be empty and an `error` message will be present.
+Returns the JWT access token.
 
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsImlhdCI6MTY4NjM5MzYwMCwiZXhwIjoxNjg2NDgwMDAwfQ.some_signature_here"
+}
+```
+
+#### **Error Response (`401 Unauthorized`)**
+
+```json
+{
+  "error": "Invalid username or password"
+}
+```
+
+---
+
+## **Protected API Endpoints**
+
+All endpoints below require the `Authorization: Bearer <YOUR_JWT_TOKEN>` header.
+
+### **2. File Upload**
+
+#### **Get Pre-signed Upload URLs**
+
+*   **Endpoint:** `POST /api/upload/signed-url`
+*   **Description:** Generates secure, temporary URLs that allow a client to upload subtitle files directly to cloud storage.
+
+**Request Body**
+| Field | Type | Description | Required |
+| :---- | :--- | :--- | :--- |
+| `files` | `string[]` | An array of filenames you intend to upload. | Yes |
+
+**Example Request (`curl`)**
+```bash
+# Replace <YOUR_JWT_TOKEN> with the token from the login step
+curl -X POST \
+  -H "Authorization: Bearer <YOUR_JWT_TOKEN>" \
+  -H "Content-Type: application/json" \
+  http://ec2-54-87-136-3.compute-1.amazonaws.com/api/upload/signed-url \
+  -d '{
+    "files": ["Attending Grace.srt"]
+  }'
+```
+
+**Success Response (`200 OK`)**
 ```json
 {
   "urls": [
     {
       "fileName": "Attending Grace.srt",
-      "uploadUrl": "https://your-bucket.s3.amazonaws.com/uploads/translate/uuid-1/.../Attending%20Grace.srt?X-Amz-Algorithm=...",
+      "uploadUrl": "https://your-bucket.s3.amazonaws.com/...",
       "path": "uploads/translate/uuid-1/Attending Grace.srt"
-    },
-    {
-      "fileName": "Messaging.vtt",
-      "uploadUrl": "https://your-bucket.s3.amazonaws.com/uploads/translate/uuid-2/.../Messaging.vtt?X-Amz-Algorithm=...",
-      "path": "uploads/translate/uuid-2/Messaging.vtt"
-    },
-    {
-      "fileName": "invalid-file.txt",
-      "uploadUrl": "",
-      "path": "",
-      "error": "Invalid file type. Only .srt and .vtt are supported."
     }
   ]
 }
 ```
 
-#### **Error Response (`400 Bad Request`)**
-
-Returned if the `files` field is missing or not an array.
-
-```json
-{
-  "error": "Invalid request: 'files' must be an array."
-}
-```
-
 ---
 
-### **2. Create and Process Translation Jobs**
+### **3. Job Management**
 
-Initiates the translation process for the uploaded files. This endpoint is asynchronous; it creates the jobs and returns immediately with a `202 Accepted` status. The actual translation happens in the background.
+#### **Create and Process Translation Jobs**
 
-*   **Endpoint:** `POST /process`
-*   **Description:** Creates translation jobs for one or more uploaded files.
+*   **Endpoint:** `POST /api/process`
+*   **Description:** Creates translation jobs for one or more uploaded files. This is an asynchronous endpoint; the actual translation happens in the background.
 
-#### **Request Body**
-
-| Field       | Type                | Description                                                                                             | Required |
-| :---------- | :------------------ | :------------------------------------------------------------------------------------------------------ | :------- |
-| `languages` | `string[]`          | An array of target language codes (e.g., `'fr'`, `'de'`, `'pt'`).                                         | Yes      |
-| `files`     | `Record<string, string>` | An object where each key is a friendly name for the job and the value is the `path` from the previous step. | Yes      |
+**Request Body**
+| Field | Type | Description | Required |
+| :--- | :--- | :--- | :--- |
+| `languages` | `string[]` | An array of target language codes (e.g., `'fr'`, `'de'`). | Yes |
+| `files` | `Record<string, string>` | An object where each key is a job name and the value is the `path` from the upload step. | Yes |
 
 **Example Request (`curl`)**
 ```bash
-curl -X POST http://localhost:3000/api/process \
--H "Content-Type: application/json" \
--d '{
-  "languages": ["fr", "de", "pt"],
-  "files": {
-    "Attending Grace": "uploads/translate/uuid-1/Attending Grace.srt",
-    "Messaging": "uploads/translate/uuid-2/Messaging.vtt"
-  }
-}'
+curl -X POST \
+  -H "Authorization: Bearer <YOUR_JWT_TOKEN>" \
+  -H "Content-Type: application/json" \
+  http://ec2-54-87-136-3.compute-1.amazonaws.com/api/process \
+  -d '{
+    "languages": ["fr", "de"],
+    "files": {
+      "Attending Grace": "uploads/translate/uuid-1/Attending Grace.srt"
+    }
+  }'
 ```
 
-#### **Success Response (`202 Accepted`)**
-
-Returns a confirmation message and an array of the `jobIds` that were created and batched for processing.
-
+**Success Response (`202 Accepted`)**
 ```json
 {
   "message": "Jobs batched for processing.",
-  "jobIds": [1, 2]
+  "jobIds": [1]
 }
 ```
 
-#### **Error Response (`400 Bad Request`)**
+#### **Append Languages to Jobs**
 
-Returned if `languages` or `files` are missing or empty.
+*   **Endpoint:** `PATCH /api/jobs/append-languages`
+*   **Description:** Adds new target languages to existing jobs and re-batches them. It intelligently skips languages that already exist and performs a credit check for the new work.
 
+**Request Body**
+| Field | Type | Description | Required |
+| :--- | :--- | :--- | :--- |
+| `jobIds` | `number[]` | An array of job IDs to update. | Yes |
+| `languages` | `string[]` | An array of language codes to add. | Yes |
+
+**Example Request (`curl`)**
+```bash
+curl -X PATCH \
+  -H "Authorization: Bearer <YOUR_JWT_TOKEN>" \
+  -H "Content-Type: application/json" \
+  http://ec2-54-87-136-3.compute-1.amazonaws.com/api/jobs/append-languages \
+  -d '{
+    "jobIds": [1, 2],
+    "languages": ["es", "it"]
+  }'
+```
+
+**Success Response (`200 OK`)**
 ```json
 {
-  "error": "Missing languages or files"
+  "message": "Append languages operation completed.",
+  "updated": [
+    {
+      "jobId": 1,
+      "addedLanguages": ["es", "it"]
+    }
+  ],
+  "skipped": [
+    {
+      "jobId": 2,
+      "reason": "Insufficient credits. Required: ~1.0, Available: 0.8"
+    }
+  ]
+}
+```
+
+#### **Delete Jobs**
+
+*   **Endpoint:** `DELETE /api/jobs`
+*   **Description:** Permanently deletes one or more jobs and their associated files. Jobs in `processing` status are ignored. **This action is irreversible.**
+
+**Request Body**
+| Field | Type | Description | Required |
+| :--- | :--- | :--- | :--- |
+| `jobIds` | `number[]` | An array of job IDs to delete. | Yes |
+
+**Example Request (`curl`)**
+```bash
+curl -X DELETE \
+  -H "Authorization: Bearer <YOUR_JWT_TOKEN>" \
+  -H "Content-Type: application/json" \
+  http://ec2-54-87-136-3.compute-1.amazonaws.com/api/jobs \
+  -d '{
+    "jobIds": [1, 3, 5]
+  }'
+```
+
+**Success Response (`200 OK`)**
+```json
+{
+  "message": "Delete operation completed.",
+  "deleted": [1, 5],
+  "skipped": [3]
 }
 ```
 
 ---
 
-### **3. Get Job Report**
+### **4. Reporting and Downloading**
 
-Retrieves a summary of all translation jobs, including their status and metadata.
+#### **Get Job Report (with Pagination)**
 
-*   **Endpoint:** `GET /report`
-*   **Description:** Fetches a list of all jobs in the system.
+*   **Endpoint:** `GET /api/report`
+*   **Description:** Fetches a paginated, filterable, and sortable list of all jobs.
+
+**Query Parameters**
+| Parameter | Type | Description | Default |
+| :--- | :--- | :--- | :--- |
+| `page` | `number` | The page number to retrieve. | `1` |
+| `pageSize` | `number` | The number of items per page. (Max: 100) | `10` |
+| `search` | `string` | A search term to filter jobs by name. | `""` |
+| `sortBy` | `string` | Column to sort by: `jobName`, `status`, `createdAt`. | `createdAt` |
+| `sortOrder` | `string` | Sort direction: `asc`, `desc`. | `desc` |
+| `filter[status]` | `string` | Comma-separated list of statuses to filter by. | `""` |
 
 **Example Request (`curl`)**
 ```bash
-curl http://localhost:3000/api/report
+curl -H "Authorization: Bearer <YOUR_JWT_TOKEN>" "http://ec2-54-87-136-3.compute-1.amazonaws.com/api/report?search=Grace&filter[status]=completed,failed"
 ```
 
-#### **Success Response (`200 OK`)**
-
-Returns an object containing a list of all jobs. The `languages` array includes `'en'` for the original file plus all target languages.
-
+**Success Response (`200 OK`)**
 ```json
 {
-  "jobs": [
-    {
-      "jobId": 2,
-      "jobName": "Messaging",
-      "languages": ["en", "fr", "de", "pt"],
-      "createdAt": "2025-06-10T10:30:00.000Z",
-      "status": "processing",
-      "creditsUsed": null
-    },
+  "data": [
     {
       "jobId": 1,
       "jobName": "Attending Grace",
-      "languages": ["en", "fr", "de", "pt"],
+      "languages": ["en", "fr", "de"],
       "createdAt": "2025-06-10T10:29:55.000Z",
       "status": "completed",
       "creditsUsed": 1250
     }
-  ]
+  ],
+  "meta": {
+    "totalItems": 1,
+    "currentPage": 1,
+    "pageSize": 10,
+    "totalPages": 1,
+    "hasNextPage": false,
+    "hasPrevPage": false
+  }
+}
+```
+
+#### **Download Translated Files**
+
+*   **Endpoint:** `POST /api/download`
+*   **Description:** Creates a zip archive of translated files and provides a URL to download it.
+
+**Request Body**
+| Field | Type | Description | Required |
+| :--- | :--- | :--- | :--- |
+| `jobIds` | `number[]` | An array of job IDs to include in the zip. | Yes |
+
+**Example Request (`curl`)**
+```bash
+curl -X POST \
+  -H "Authorization: Bearer <YOUR_JWT_TOKEN>" \
+  -H "Content-Type: application/json" \
+  http://ec2-54-87-136-3.compute-1.amazonaws.com/api/download \
+  -d '{
+    "jobIds": [1, 22]
+  }'
+```
+
+**Success Response (`200 OK`)**
+```json
+{
+  "downloadUrl": "https://your-bucket.s3.amazonaws.com/..."
 }
 ```
 
 ---
 
-### **4. Download Translated Files**
+### **5. Dashboard and Credits**
 
-Generates a pre-signed download URL for a `.zip` archive containing all the translated `.vtt` files for one or more specified jobs.
+#### **Get Dashboard Summary**
 
-*   **Endpoint:** `POST /download`
-*   **Description:** Creates a zip archive of translated files and provides a URL to download it.
-
-#### **Request Body**
-
-| Field   | Type       | Description                               | Required |
-| :------ | :--------- | :---------------------------------------- | :------- |
-| `jobIds`  | `number[]` | An array of job IDs to include in the zip. | Yes      |
+*   **Endpoint:** `GET /api/dashboard/summary`
+*   **Description:** Retrieves a high-level summary of system statistics.
 
 **Example Request (`curl`)**
 ```bash
-curl -X POST http://localhost:3000/api/download \
--H "Content-Type: application/json" \
--d '{
-  "jobIds": [1, 22]
-}'
+curl -H "Authorization: Bearer <YOUR_JWT_TOKEN>" http://ec2-54-87-136-3.compute-1.amazonaws.com/api/dashboard/summary
+```
+
+**Success Response (`200 OK`)**
+```json
+{
+  "availableUnits": 9850.5,
+  "totalJobs": 25,
+  "processingJobs": 2,
+  "completedJobs": 18
+}
+```
+
+#### **Get Remaining Credits**
+
+*   **Endpoint:** `GET /api/dashboard/credits/remaining`
+*   **Description:** Retrieves the current available credit balance for the system.
+
+**Example Request (`curl`)**
+```bash
+curl -H "Authorization: Bearer <YOUR_JWT_TOKEN>" http://ec2-54-87-136-3.compute-1.amazonaws.com/api/dashboard/credits/remaining
+```
+
+**Success Response (`200 OK`)**
+```json
+{
+  "availableUnits": 9850.5
+}
+```
+
+---
+
+## **Admin Endpoints**
+
+These endpoints are for system administration and are protected by a separate, hardcoded `RECHARGE_SECRET_TOKEN`. They should not be exposed to regular users.
+
+### **Recharge System Credits**
+
+*   **Endpoint:** `POST /admin/recharge`
+*   **Authentication:** Requires `Authorization: Bearer <RECHARGE_SECRET_TOKEN>` header.
+*   **Description:** Adds a specified number of units to the system's total available credit balance.
+
+#### **Request Body**
+
+| Field | Type | Description | Required |
+| :--- | :--- | :--- | :--- |
+| `amount` | `number` | The number of credit units to add. Must be > 0. | Yes |
+
+**Example Request (`curl`)**
+```bash
+curl -X POST \
+  -H "Authorization: Bearer a_different_very_long_random_secret_token" \
+  -H "Content-Type: application/json" \
+  http://ec2-54-87-136-3.compute-1.amazonaws.com/admin/recharge \
+  -d '{
+    "amount": 5000
+  }'
 ```
 
 #### **Success Response (`200 OK`)**
 
-Returns a single pre-signed URL to download the generated zip file.
-
 ```json
 {
-  "downloadUrl": "https://your-bucket.s3.amazonaws.com/downloads/translations-1686393600000.zip?X-Amz-Algorithm=..."
-}
-```
-
-#### **Error Response (`400 Bad Request`)**
-
-Returned if the `jobIds` field is missing or not an array.
-
-```json
-{
-  "error": "Invalid or empty 'jobIds' array."
-}
-```
-
-#### **Error Response (`500 Internal Server Error`)**
-
-Returned if an error occurs during the file download or zipping process on the server.
-
-```json
-{
-  "error": "Failed to process download request."
+  "message": "Credits recharged successfully.",
+  "newAvailableUnits": 14850.5
 }
 ```

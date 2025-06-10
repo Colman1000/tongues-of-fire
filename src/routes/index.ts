@@ -4,6 +4,7 @@ import process from "./process";
 import report from "./report";
 import download from "./download";
 import dashboard from "./dashboard";
+import jobs from "./jobs";
 
 const app = new Hono();
 
@@ -13,5 +14,6 @@ app.route("/process", process);
 app.route("/report", report);
 app.route("/download", download);
 app.route("/dashboard", dashboard);
+app.route("/jobs", jobs);
 
 export default app;

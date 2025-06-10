@@ -6,6 +6,7 @@ import { storageService } from "@/services/storage";
 import { srtToVtt, vttToSrt } from "@/services/file-converter";
 import { eq } from "drizzle-orm";
 import path from "node:path";
+import { logAuditEvent } from "@/services/audit";
 
 const app = new Hono();
 
@@ -70,15 +71,13 @@ app.post("/", async (c) => {
           sourceSrtPath,
           Buffer.from(vttToSrt(fileContent)),
         );
-        await db
-          .insert(translatedFiles)
-          .values({
-            jobId,
-            language: "en",
-            path: originalPath,
-            subtitleDurationSeconds: duration,
-            creditsUsed: credits,
-          });
+        await db.insert(translatedFiles).values({
+          jobId,
+          language: "en",
+          path: originalPath,
+          subtitleDurationSeconds: duration,
+          creditsUsed: credits,
+        });
       }
 
       await db
@@ -90,6 +89,14 @@ app.post("/", async (c) => {
       await db.update(jobs).set({ status: "failed" }).where(eq(jobs.id, jobId));
     }
   }
+
+  // Log the creation of all jobs in this batch
+  const { sub: actor } = c.get("jwtPayload");
+  await logAuditEvent({
+    actor,
+    action: "JOB_CREATED",
+    details: { jobIds: createdJobIds },
+  });
 
   return c.json(
     { message: "Jobs batched for processing.", jobIds: createdJobIds },
