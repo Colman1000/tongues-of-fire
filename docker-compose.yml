@@ -1,8 +1,6 @@
 services:
   server:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: colman1000/pentecost:latest
     container_name: bun-server
     ports:
       - "3000:3000"
@@ -15,9 +13,7 @@ services:
     command: sh -c "bun run src/db/migrate.ts && bun run src/index.ts"
 
   worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: colman1000/pentecost:latest
     container_name: bun-worker
     env_file:
       - .env
@@ -35,7 +31,7 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
-#      - "443:443"
+    #      - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data
