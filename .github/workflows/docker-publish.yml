@@ -48,5 +48,5 @@ jobs:
           # 1. 'latest' for the most recent build on the main branch.
           # 2. The Git commit SHA for a unique, versioned tag.
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/your-app-name:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/your-app-name:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/pentecost:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/pentecost:${{ github.sha }}
