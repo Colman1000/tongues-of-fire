@@ -42,3 +42,10 @@ CREATE TABLE `translatedFiles` (
 	`createdAt` integer DEFAULT (strftime('%s', 'now')) NOT NULL,
 	FOREIGN KEY (`jobId`) REFERENCES `jobs`(`id`) ON UPDATE no action ON DELETE cascade
 );
+--> statement-breakpoint
+CREATE INDEX `auditLogs_action_idx` ON `audit_logs` (`action`);--> statement-breakpoint
+CREATE INDEX `auditLogs_actor_idx` ON `audit_logs` (`actor`);--> statement-breakpoint
+CREATE INDEX `auditLogs_createdAt_idx` ON `audit_logs` (`createdAt`);--> statement-breakpoint
+CREATE INDEX `jobs_status_idx` ON `jobs` (`status`);--> statement-breakpoint
+CREATE INDEX `jobs_createdAt_idx` ON `jobs` (`createdAt`);--> statement-breakpoint
+CREATE INDEX `translatedFiles_jobId_idx` ON `translatedFiles` (`jobId`);

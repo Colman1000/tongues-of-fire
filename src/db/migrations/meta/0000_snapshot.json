@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "3ad347f2-0682-4ad7-9bc2-3c26a89f87fd",
+  "id": "6b4db72a-be16-4e19-b813-b61bdf1ddc46",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "audit_logs": {
@@ -44,7 +44,29 @@
           "default": "(strftime('%s', 'now'))"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "auditLogs_action_idx": {
+          "name": "auditLogs_action_idx",
+          "columns": [
+            "action"
+          ],
+          "isUnique": false
+        },
+        "auditLogs_actor_idx": {
+          "name": "auditLogs_actor_idx",
+          "columns": [
+            "actor"
+          ],
+          "isUnique": false
+        },
+        "auditLogs_createdAt_idx": {
+          "name": "auditLogs_createdAt_idx",
+          "columns": [
+            "createdAt"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {}
@@ -119,7 +141,22 @@
           "default": "(strftime('%s', 'now'))"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "jobs_status_idx": {
+          "name": "jobs_status_idx",
+          "columns": [
+            "status"
+          ],
+          "isUnique": false
+        },
+        "jobs_createdAt_idx": {
+          "name": "jobs_createdAt_idx",
+          "columns": [
+            "createdAt"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {}
@@ -262,7 +299,15 @@
           "default": "(strftime('%s', 'now'))"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "translatedFiles_jobId_idx": {
+          "name": "translatedFiles_jobId_idx",
+          "columns": [
+            "jobId"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {
         "translatedFiles_jobId_jobs_id_fk": {
           "name": "translatedFiles_jobId_jobs_id_fk",

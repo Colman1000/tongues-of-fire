@@ -7,6 +7,28 @@ import { logAuditEvent } from "@/services/audit";
 
 const app = new Hono();
 
+// --- NEW: Endpoint to get details for a single job ---
+app.get("/:id", async (c) => {
+  const jobId = parseInt(c.req.param("id"), 10);
+  if (isNaN(jobId)) {
+    return c.json({ error: "Invalid job ID." }, 400);
+  }
+
+  // Use a relational query to fetch the job and all its associated files
+  const job = await db.query.jobs.findFirst({
+    where: eq(jobs.id, jobId),
+    with: {
+      files: true, // This will include the nested array of translated files
+    },
+  });
+
+  if (!job) {
+    return c.json({ error: "Job not found." }, 404);
+  }
+
+  return c.json(job);
+});
+
 // --- NEW: Endpoint to append languages to existing jobs ---
 app.patch("/append-languages", async (c) => {
   const { jobIds, languages } = await c.req.json<{

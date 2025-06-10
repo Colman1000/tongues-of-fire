@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { db } from "@/db";
-import { jobs, translatedFiles, jobStatuses } from "@/db/schema"; // 1. Import jobStatuses
+import { jobs, translatedFiles, jobStatuses } from "@/db/schema";
 import {
   asc,
   desc,
@@ -40,15 +40,11 @@ app.get("/", async (c) => {
     conditions.push(like(jobs.name, `%${search}%`));
   }
 
-  // --- THE FIX IS HERE ---
-  // Filter condition (applies to job status)
   if (filterStatus) {
     const requestedStatuses = filterStatus.split(",").map((s) => s.trim());
-    // 2. Validate the user-provided statuses against our official list
     const validStatuses = requestedStatuses.filter(
       (s): s is (typeof jobStatuses)[number] => jobStatuses.includes(s as any),
     );
-    // 3. Only add the condition if there are valid statuses to filter by
     if (validStatuses.length > 0) {
       conditions.push(inArray(jobs.status, validStatuses));
     }
@@ -57,13 +53,11 @@ app.get("/", async (c) => {
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
   // --- 3. DYNAMICALLY BUILD THE ORDER BY CLAUSE ---
-  const sortableColumns: Record<
-    string,
-    (typeof jobs)[keyof typeof jobs.$inferSelect]
-  > = {
+  const sortableColumns: Record<string, any> = {
     jobName: jobs.name,
     status: jobs.status,
     createdAt: jobs.createdAt,
+    creditsUsed: sql`credits_used`, // Allow sorting by the calculated sum
   };
 
   const sortColumn = sortableColumns[sortBy] || jobs.createdAt;
@@ -71,6 +65,8 @@ app.get("/", async (c) => {
     sortOrder.toLowerCase() === "asc" ? asc(sortColumn) : desc(sortColumn);
 
   // --- 4. EXECUTE QUERIES IN PARALLEL ---
+
+  // --- THE FIX IS HERE: Use a JOIN and GROUP BY for accurate credit summation ---
   const dataQuery = db
     .select({
       jobId: jobs.id,
@@ -78,10 +74,20 @@ app.get("/", async (c) => {
       languages: jobs.targetLanguages,
       createdAt: jobs.createdAt,
       status: jobs.status,
-      creditsUsed: sql<number>`(SELECT SUM(${translatedFiles.creditsUsed}) FROM ${translatedFiles} WHERE ${translatedFiles.jobId} = ${jobs.id})`,
+      creditsUsed: sql<number>`SUM(${translatedFiles.creditsUsed})`.mapWith(
+        Number,
+      ),
     })
     .from(jobs)
+    .leftJoin(translatedFiles, eq(jobs.id, translatedFiles.jobId))
     .where(whereClause)
+    .groupBy(
+      jobs.id,
+      jobs.name,
+      jobs.targetLanguages,
+      jobs.createdAt,
+      jobs.status,
+    )
     .orderBy(orderByClause)
     .limit(pageSizeNum)
     .offset((pageNum - 1) * pageSizeNum);
@@ -100,6 +106,8 @@ app.get("/", async (c) => {
   const response = {
     data: results.map((job) => ({
       ...job,
+      // Ensure creditsUsed is a number, defaulting to 0 if null (for jobs with no files)
+      creditsUsed: job.creditsUsed || 0,
       languages: ["en", ...job.languages],
     })),
     meta: {

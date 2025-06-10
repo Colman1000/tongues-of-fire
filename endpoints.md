@@ -263,6 +263,65 @@ curl -H "Authorization: Bearer <YOUR_JWT_TOKEN>" "http://ec2-54-87-136-3.compute
 }
 ```
 
+
+#### **Get Single Job Details**
+
+*   **Endpoint:** `GET /api/jobs/:id`
+*   **Description:** Retrieves the complete details for a single job, including a list of all its associated translated files.
+
+**URL Parameters**
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| `id` | `number` | The unique identifier of the job. |
+
+**Example Request (`curl`)**
+```bash
+curl -H "Authorization: Bearer <YOUR_JWT_TOKEN>" http://localhost:3000/api/jobs/1
+```
+
+**Success Response (`200 OK`)**
+```json
+{
+  "id": 1,
+  "name": "01 JUNE 2025 SERMON DEMO",
+  "originalPath": "uploads/translate/uuid-1/sermon.vtt",
+  "sourceSrtPath": "processed/1/source.srt",
+  "status": "completed",
+  "targetLanguages": ["fr", "es", "pt-BR", "zh", "ru"],
+  "completedAt": "2025-06-10T15:13:00.000Z",
+  "createdAt": "2025-06-10T15:12:19.000Z",
+  "updatedAt": "2025-06-10T15:13:00.000Z",
+  "files": [
+    {
+      "id": 1,
+      "jobId": 1,
+      "language": "en",
+      "path": "uploads/translate/uuid-1/sermon.vtt",
+      "subtitleDurationSeconds": 1750,
+      "creditsUsed": 0.5,
+      "createdAt": "2025-06-10T15:12:20.000Z"
+    },
+    {
+      "id": 2,
+      "jobId": 1,
+      "language": "fr",
+      "path": "processed/1/fr.vtt",
+      "subtitleDurationSeconds": 1752,
+      "creditsUsed": 0.5,
+      "createdAt": "2025-06-10T15:12:55.000Z"
+    }
+    // ... more file objects
+  ]
+}
+```
+
+**Error Response (`404 Not Found`)**
+```json
+{
+  "error": "Job not found."
+}
+```
+
 #### **Download Translated Files**
 
 *   **Endpoint:** `POST /api/download`
