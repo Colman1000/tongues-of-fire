@@ -50,3 +50,20 @@ jobs:
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/pentecost:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/pentecost:${{ github.sha }}
+
+  # Update Server
+  deploy-to-dev:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Add SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Run script on EC2 instance in background
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} 'nohup bash ~/serverUpdate.sh > ./logs/serverUpdate.log 2>&1 &'
