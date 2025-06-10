@@ -10,7 +10,7 @@ WORKDIR /usr/src/app
 RUN apt-get update && apt-get install -y build-essential python3 make g++
 
 # Copy package management files
-COPY package.json bun.lockb ./
+COPY package.json bun.lock ./
 
 # Install dependencies using the frozen lockfile for reproducibility
 RUN bun install --frozen-lockfile
