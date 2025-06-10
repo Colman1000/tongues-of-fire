@@ -1,0 +1,50 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bun-server
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    volumes:
+      - ./app.db:/usr/src/app/app.db
+    networks:
+      - app-network
+    command: sh -c "bun run src/db/migrate.ts && bun run src/index.ts"
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bun-worker
+    env_file:
+      - .env
+    depends_on:
+      - server
+    volumes:
+      - ./app.db:/usr/src/app/app.db
+    networks:
+      - app-network
+    command: bun run src/jobs/translation-processor.ts
+
+  caddy:
+    image: caddy:2.7.5-alpine
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+#      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  caddy_data:
