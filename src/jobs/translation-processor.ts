@@ -8,6 +8,7 @@ import { mkdir, rmdir, writeFile } from "fs/promises";
 import path from "path";
 import { calculateSubtitleDuration, calculateCredits } from "@/utils/subtitle";
 import { logAuditEvent } from "@/services/audit";
+import { srtToVtt } from "@/services/file-converter"; // 1. Import the converter
 
 async function processJob() {
   // 1. Find the next available job
@@ -22,19 +23,15 @@ async function processJob() {
   }
 
   // --- INTELLIGENT PRE-FLIGHT CHECKS ---
-
-  // 2. Determine what work actually needs to be done
+  // ... (This entire section remains the same and is correct) ...
   const existingFiles = await db
     .select({ language: translatedFiles.language })
     .from(translatedFiles)
     .where(eq(translatedFiles.jobId, jobToProcess.id));
   const existingLangs = new Set(existingFiles.map((f) => f.language));
-
   const languagesToTranslate = jobToProcess.targetLanguages.filter(
     (lang) => !existingLangs.has(lang),
   );
-
-  // 3. Handle the edge case where no new work is needed
   if (languagesToTranslate.length === 0) {
     console.log(
       `Job ${jobToProcess.id}: No new languages to translate. Marking as complete.`,
@@ -45,8 +42,6 @@ async function processJob() {
       .where(eq(jobs.id, jobToProcess.id));
     return;
   }
-
-  // 4. Get the cost-per-language from the original 'en' file
   const [originalFile] = await db
     .select()
     .from(translatedFiles)
@@ -56,7 +51,6 @@ async function processJob() {
         eq(translatedFiles.language, "en"),
       ),
     );
-
   if (!originalFile) {
     console.error(
       `Job ${jobToProcess.id} is batched but has no 'en' file. Marking as failed.`,
@@ -67,15 +61,10 @@ async function processJob() {
       .where(eq(jobs.id, jobToProcess.id));
     return;
   }
-
-  // 5. Calculate the ACCURATE estimated cost for ONLY the new work
   const estimatedCostForNewWork =
     originalFile.creditsUsed * languagesToTranslate.length;
-
-  // 6. Perform the credit check against the accurate cost
   const [creditsRecord] = await db.select().from(systemCredits).limit(1);
   const availableUnits = creditsRecord?.availableUnits ?? 0;
-
   if (availableUnits < estimatedCostForNewWork) {
     console.log(
       `Insufficient credits for job ${jobToProcess.id}. Required for new languages: ~${estimatedCostForNewWork}, Available: ${availableUnits}. Skipping.`,
@@ -102,24 +91,34 @@ async function processJob() {
     const localSourceSrt = path.join(tempDir, "source.srt");
     await writeFile(localSourceSrt, srtBuffer);
 
-    // 7. Execute translation promises for ONLY the new languages
+    // Execute translation promises for ONLY the new languages
     const translatePromises = languagesToTranslate.map(async (lang) => {
-      const localVtt = path.join(tempDir, `${lang}.vtt`);
+      // 2. Define a temporary path for the translated SRT file from DeepL
+      const localTranslatedSrt = path.join(tempDir, `${lang}.srt`);
 
       await translator.translateDocument(
         localSourceSrt,
-        localVtt,
+        localTranslatedSrt, // Output the translated SRT here
         null,
         lang as deepl.TargetLanguageCode,
       );
 
-      const translatedContent = await Bun.file(localVtt).text();
-      const duration = calculateSubtitleDuration(translatedContent);
+      // 3. Read the SRT content that DeepL just created
+      const translatedSrtContent = await Bun.file(localTranslatedSrt).text();
+
+      // 4. Convert the SRT content to VTT format
+      const translatedVttContent = srtToVtt(translatedSrtContent);
+
+      // 5. Perform all subsequent operations on the correct VTT content
+      const duration = calculateSubtitleDuration(translatedVttContent);
       const credits = calculateCredits(duration);
 
       const remoteVttPath = `processed/${jobToProcess.id}/${lang}.vtt`;
-      const translatedFileBuffer = await Bun.file(localVtt).arrayBuffer();
-      await storageService.uploadFile(remoteVttPath, translatedFileBuffer);
+      const translatedVttBuffer = Buffer.from(translatedVttContent);
+
+      // 6. Upload the VTT buffer to cloud storage
+      await storageService.uploadFile(remoteVttPath, translatedVttBuffer);
+
       await db.insert(translatedFiles).values({
         jobId: jobToProcess.id,
         language: lang,
@@ -131,9 +130,7 @@ async function processJob() {
 
     await Promise.all(translatePromises);
 
-    // --- CREDIT DEDUCTION (THE FIX IS HERE) ---
-    // We deduct the pre-calculated cost of the work we just completed.
-    // This is more efficient and avoids the TypeScript error.
+    // --- CREDIT DEDUCTION ---
     if (estimatedCostForNewWork > 0) {
       await db
         .update(systemCredits)
@@ -162,7 +159,6 @@ async function processJob() {
       .insert(logs)
       .values({ jobId: jobToProcess.id, message: (error as Error).message });
 
-    // Log the job failure
     await logAuditEvent({
       actor: "system",
       action: "JOB_FAILED",
@@ -177,7 +173,6 @@ async function processJob() {
 }
 
 async function main() {
-  // Read the interval from environment variables, with a fallback.
   const intervalSeconds = parseInt(
     process.env.JOB_WORKER_INTERVAL_SECONDS || "20",
     10,
@@ -190,8 +185,8 @@ async function main() {
 
   while (true) {
     await processJob();
-    // Use the configured interval in the loop's delay.
     await new Promise((resolve) => setTimeout(resolve, intervalMilliseconds));
   }
 }
+
 main().catch(console.error);
